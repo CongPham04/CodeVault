@@ -1,0 +1,60 @@
+services:
+
+  # ── MySQL Database ──
+  mysql-db:
+    image: mysql:8.0
+    container_name: codevault-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root123456
+      MYSQL_DATABASE: codevault_db
+      MYSQL_USER: codevault
+      MYSQL_PASSWORD: codevault123
+    ports:
+      - "3307:3306" # Exposed on 3307 to avoid conflict with local MySQL
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - codevault-network
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot123456" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ── Spring Boot Application ──
+  codevault-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: codevault-app
+    restart: unless-stopped
+    depends_on:
+      mysql-db:
+        condition: service_healthy
+    environment:
+      # Database connection (uses Docker service name as host)
+      DB_HOST: mysql-db
+      DB_PORT: 3306
+      DB_NAME: codevault_db
+      DB_USERNAME: codevault
+      DB_PASSWORD: codevault123
+      # Storage location inside container
+      STORAGE_LOCATION: /var/codevault-storage
+    ports:
+      - "8080:8080"
+    volumes:
+      - codevault_storage:/var/codevault-storage
+    networks:
+      - codevault-network
+
+volumes:
+  mysql_data:
+    driver: local
+  codevault_storage:
+    driver: local
+
+networks:
+  codevault-network:
+    driver: bridge
